@@ -58,6 +58,12 @@ FOREIGN KEY(id_plan) REFERENCES planes(id_plan),
 FOREIGN KEY(id_artista) REFERENCES artistas(id_artista)
 );
 
+CREATE TABLE IF NOT EXISTS new_suscripciones(
+id_plan INT PRIMARY KEY,
+id_artista VARCHAR(25),
+alta_suscripcion TIMESTAMP,
+baja_suscripcion TIMESTAMP)
+;
 
 -- Alter Table -- 
 
@@ -141,16 +147,94 @@ FROM canciones n
 JOIN artistas a ON n.id_cancion = a.id_artista;
 
 -- Con esta vista podemos observar los álbumes publicados en por ejemplo los 2000
-CREATE VIEW albumes_fecha AS
+CREATE OR REPLACE VIEW albumes_fecha AS
 SELECT fecha_publicacion,titulo_album
 FROM albumes
 WHERE fecha_publicacion LIKE '%2000%';
--- Creamos Trigger que nos permite interactuar con los inserts de nuevos usuarios que sumando -- 
+
+
+-- Con esta vista ordenamos a nuestros clientes de manera alfabética ascendente, con el objetivo de encontrar rapido sus datos
+CREATE OR REPLACE VIEW nom_artistas_asc AS
+SELECT nombre_artista,business_mail
+FROM artistas
+ORDER BY nombre_artista ASC;
+-- Con esta vista generamos el orden de nuestros clientes sabiendo quienes son miembros hace mas tiempo
+CREATE OR REPLACE VIEW mem_clientes_orden_asc AS
+SELECT id_artista, alta_suscripcion
+FROM suscripciones
+ORDER BY alta_suscripcion ASC;
+-- Con esta vista generamos el orden de nuestros clientes conociendo su id
+CREATE OR REPLACE VIEW nom_artista_id_asc AS
+SELECT id_artista,nombre_artista
+FROM artistas
+ORDER BY id_artista;
+-- Creamos Trigger que nos permite interactuar con los inserts de nuevos usuarios que se van sumando -- 
 DELIMITER $$
-CREATE TRIGGER after_insert_usuarios
+CREATE TRIGGER tr_ai_usuarios
 AFTER INSERT ON usuarios
 FOR EACH ROW
 BEGIN
 	UPDATE artistas SET seguidores_actuales = seguidores_actuales +1 WHERE id_artista = id_artista;
 END$$
 DELIMITER ;
+
+-- Trigger que nos sirve de base para mantener un log de suscripciones
+
+DELIMITER $$
+CREATE TRIGGER `tr_add_new_suscripciones`
+AFTER INSERT ON `suscripciones`
+FOR EACH ROW
+INSERT INTO `new_suscripciones` (alta_suscripcion,baja_suscripcion) VALUES (NEW.alta_suscripcion, NEW.baja_suscripcion);
+END$$
+DELIMITER ;
+
+--
+--                Espacio para FUNCIONES             --
+
+
+
+--   Funcion creada para traer un promedio de la cantidad de canciones por 
+--   album Stadium Arcadium siendo este el album con más canciones en la DB
+
+DELIMITER $$
+CREATE FUNCTION get_AverageCanciones()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE VALUE INT;
+SELECT AVG (track) INTO VALUE FROM canciones WHERE titulo_album = "Stadium Arcadium";
+RETURN VALUE;
+END$$
+DELIMITER ;
+-- 3 Funciones que nos permiten conocer cuantos miembros de tal suscripción hay para cada rango
+DELIMITER $$
+CREATE FUNCTION get_CountGoldM()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE VALUE INT;
+SELECT COUNT(tipo_suscripcion) INTO VALUE FROM planes WHERE tipo_suscripcion ="Gold" ;
+RETURN VALUE;
+END$$
+DELIMITER ;
+DELIMITER $$
+CREATE FUNCTION get_CountBronzeM()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE VALUE INT;
+SELECT COUNT(tipo_suscripcion) INTO VALUE FROM planes WHERE tipo_suscripcion ="Bronze" ;
+RETURN VALUE;
+END$$
+DELIMITER ;
+DELIMITER $$
+CREATE FUNCTION get_CountSilverM()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE VALUE INT;
+SELECT COUNT(tipo_suscripcion) INTO VALUE FROM planes WHERE tipo_suscripcion ="Silver" ;
+RETURN VALUE;
+END$$
+DELIMITER ;
+
